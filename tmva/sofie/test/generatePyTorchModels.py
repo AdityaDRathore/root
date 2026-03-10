@@ -104,6 +104,34 @@ def generateConvolutionModel():
     m = torch.jit.script(model)
     torch.jit.save(m,"PyTorchModelConvolution.pt")
 
+def generateBatchNormModel():
+    # Defining the model
+    model = nn.Sequential(
+                nn.BatchNorm2d(6)
+                )
+
+    #Construct loss function and optimizer
+    criterion = nn.MSELoss()
+    optimizer = torch.optim.SGD(model.parameters(),lr=0.01)
+
+    #Constructing random test dataset
+    x=torch.randn(5, 6, 5, 5)
+    y=torch.randn(5, 6, 5, 5)
+
+    #Training the model
+    for i in range(10):
+        y_pred = model(x)
+        loss = criterion(y_pred,y)
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+    #Saving the trained model
+    model.eval()
+    m = torch.jit.script(model)
+    torch.jit.save(m,"PyTorchModelBatchNorm.pt")
+
 generateSequentialModel()
 generateModuleModel()
 generateConvolutionModel()
+generateBatchNormModel()
