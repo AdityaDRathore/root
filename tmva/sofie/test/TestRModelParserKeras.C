@@ -565,3 +565,60 @@ TEST(RModel, CUSTOM_OP)
         EXPECT_LE(std::abs(outputCustomOp[i] - pOutputCustomOp[i]), TOLERANCE);
     }
 }
+
+#if PY_MAJOR_VERSION >= 3
+TEST(RModelParser_Keras, CONV2D_TRANSPOSE)
+#else
+TEST(DISABLED_RModelParser_Keras, CONV2D_TRANSPOSE)
+#endif
+{
+    // High-precision tolerance for vectorization evaluation
+    constexpr float TOLERANCE = 1e-5f;
+    
+    // Batch=1, H=4, W=4, C=1 input shape
+    std::vector<float> inputConv2DTranspose(16, 1.0f); // 4x4 of 1s
+
+    Py_Initialize();
+    if (gSystem->AccessPathName("KerasModelConv2DTranspose.keras", kFileExists))
+       GenerateModels();
+
+    // The Parser Contract Test (Structural execution of Transpose & ConvTranspose)
+    TMVA::Experimental::RSofieReader r("KerasModelConv2DTranspose.keras");
+    std::vector<float> outputConv2DTranspose = r.Compute(inputConv2DTranspose);
+
+    PyObject* main = PyImport_AddModule("__main__");
+    PyObject* fGlobalNS = PyModule_GetDict(main);
+    PyObject* fLocalNS = PyDict_New();
+    if (!fGlobalNS) {
+        throw std::runtime_error("Can't init global namespace for Python");
+    }
+    if (!fLocalNS) {
+        throw std::runtime_error("Can't init local namespace for Python");
+    }
+    
+    PyRun_String("import os", Py_single_input, fGlobalNS, fLocalNS);
+    PyRun_String("os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'", Py_single_input, fGlobalNS, fLocalNS);
+    PyRun_String("from tensorflow.keras.models import load_model", Py_single_input, fGlobalNS, fLocalNS);
+    PyRun_String("import numpy", Py_single_input, fGlobalNS, fLocalNS);
+    PyRun_String("model = load_model('KerasModelConv2DTranspose.keras')", Py_single_input, fGlobalNS, fLocalNS);
+    
+    // Feed exact input tensor from C++
+    PyRun_String("input_data = numpy.ones((1, 4, 4, 1), dtype=numpy.float32)", Py_single_input, fGlobalNS, fLocalNS);
+    // Force Keras output into NCHW to match SOFIE's optimized internal layout
+    PyRun_String("output = numpy.transpose(model(input_data).numpy(), (0, 3, 1, 2)).astype(numpy.float32)", Py_single_input, fGlobalNS, fLocalNS);
+    PyRun_String("outputSize = output.size", Py_single_input, fGlobalNS, fLocalNS);
+    
+    std::size_t pOutputConv2DTransposeSize = (std::size_t)PyLong_AsLong(PyDict_GetItemString(fLocalNS, "outputSize"));
+
+    // 1. Contract Test: Validate C++ inferred shape vs Python true shape
+    EXPECT_EQ(outputConv2DTranspose.size(), pOutputConv2DTransposeSize);
+
+    PyArrayObject* pConv2DTransposeValues = (PyArrayObject*)PyDict_GetItemString(fLocalNS, "output");
+    float* pOutputConv2DTranspose = (float*)PyArray_DATA(pConv2DTransposeValues);
+
+    // 2. Numeric Equivalence Test: Match NCHW vectorization against NHWC ground truth
+    // Testing the actual and expected output tensor values ensuring float tracking
+    for (size_t i = 0; i < outputConv2DTranspose.size(); ++i) {
+        EXPECT_LE(std::abs(outputConv2DTranspose[i] - pOutputConv2DTranspose[i]), TOLERANCE);
+    }
+}

@@ -11,6 +11,7 @@ from tensorflow.keras.layers import (
     BatchNormalization,
     Concatenate,
     Conv2D,
+    Conv2DTranspose,
     Dense,
     Input,
     LeakyReLU,
@@ -183,6 +184,20 @@ def generateCustomModel():
     model.fit(x_train, y_train, verbose=0, epochs=10, batch_size=1)
     model.save('KerasModelCustomOp.keras')
 
+def generateConv2DTransposeModel():
+    model = Sequential()
+    # Using 4x4 spatial dimensions, 2 filters, strides 2, padding same.
+    # Output should be 8x8 spatial if padding='same', giving a good test for transpositions and strides.
+    model.add(Conv2DTranspose(2, kernel_size=3, strides=2, padding="same", activation="relu", input_shape=(4,4,1)))
+
+    randomGenerator = np.random.RandomState(0)
+    x_train = randomGenerator.rand(1, 4, 4, 1)
+    y_train = randomGenerator.rand(1, 8, 8, 2)
+
+    model.compile(loss='mean_squared_error', optimizer=SGD(learning_rate=0.01))
+    model.fit(x_train, y_train, verbose=0, epochs=10, batch_size=2)
+    model.save('KerasModelConv2DTranspose.keras')
+
 print("generating Keras models for testing.....")
 generateFunctionalModel()
 generateSequentialModel()
@@ -195,3 +210,4 @@ generateBinaryOpModel()
 generateActivationModel()
 generateSwishModel()
 generateCustomModel()
+generateConv2DTransposeModel()
